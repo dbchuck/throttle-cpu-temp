@@ -94,18 +94,7 @@ fn main() {
     let mut cur_freq = max_freq;
     set_freq(cur_freq);
     let timer = timer::Timer::new();
-    let tick = chan::tick_ms(100);
-    let boom = chan::after_ms(500);
-    loop {
-        chan_select! {
-            default => {
-                println!("    .");
-                thread::sleep(std::time::Duration::from_millis(50));
-            },
-            tick.recv() => println!("tick."),
-            boom.recv() => { println!("BOOM!"); return; },
-        }
-    }
+    
     loop {
         let temp = get_temp();
         if temp > max_temp && cur_freq > min_freq {
