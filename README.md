@@ -5,10 +5,10 @@ the temperature gets higher than a configured maximum, it starts to
 throttle down the processor frequency to reduce the temperature.
 
 It was created to cope with high processor temperature on laptops while
-doing large compilations (ex: Linux kernel).
+doing large tasks (ex: compilation of Linux kernel, VMs).
 
-The idea and logic were based on `https://github.com/Sepero/temp-throttle`,
-a shell script. This application was developed in Rust and is intended to
+The idea and logic were based on `https://github.com/Sepero/temp-throttle`
+a shell script and `https://github.com/zanardo/throttle-cpu-temp`. This application was developed in Rust and is intended to
 be executed as a daemon, using little system resources.
 
 # Installing
