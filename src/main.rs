@@ -1,9 +1,11 @@
-extern crate chrono;
+extern crate futures;
+extern crate futures_timer;
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate log;
 extern crate num_cpus;
 extern crate simplelog;
-extern crate timer;
 
 use std::env;
 use std::process;
@@ -11,23 +13,39 @@ use std::{thread, time};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use simplelog::{CombinedLogger, Config, LogLevelFilter, SimpleLogger};
+use std::time::Duration;
+use futures_timer::Delay;
+use futures::prelude::*;
 
 // Sleep interval between temperature checking.
-const SLEEP_TIME_MILLI: u64 = 200;
+const SLEEP_TIME_MILLI: u64 = 50;
 
+// Interval between frequency increase operation
+const INCR_TIME_MILLI: u64 = 1000;
 
-// File where minimum supported frequency should be colected.
+// Interval between frequency decrease operation
+const DECR_TIME_MILLI: u64 = 200;
+
+// File where minimum supported frequency should be collected.
 const MIN_FREQ_FILE: &'static str = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq";
 
-// File where maximum supported frequency should be colected.
+// File where maximum supported frequency should be collected.
 const MAX_FREQ_FILE: &'static str = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq";
 
-// Step size to change cpu frequency.
+// Step size to change cpu frequency. 100Mhz step
 const STEP_FREQ: u64 = 100000;
 
 // Possible files where current temperature should be collected.
 const POSSIBLE_TEMP_FILES: &'static [&'static str] = &["/sys/class/hwmon/hwmon2/temp1_input"];
+
+const DEACCR_RATIO: f64 = (1.0 / 2.0);
+
+lazy_static! {
+    static ref FREQUENCY: std::sync::Arc<std::sync::Mutex<u64>> =
+        Arc::new(Mutex::new(max_frequency()));
+}
 
 fn parse_int_file(path: String) -> u64 {
     let mut content = String::new();
@@ -83,37 +101,67 @@ fn main() {
         Ok(x) => max_temp = x,
     }
     info!("maximum temperature: {}", max_temp);
-
     info!("cpu count: {}", num_cpus::get());
-
-    let min_freq = min_frequency();
+    let min_freq: u64 = min_frequency();
     info!("minimum frequency supported: {}", min_freq);
-    let max_freq = max_frequency();
+    let max_freq: u64 = max_frequency();
     info!("maximum frequency supported: {}", max_freq);
+    set_freq(*FREQUENCY.lock().unwrap());
 
-    let mut cur_freq = max_freq;
-    set_freq(cur_freq);
-    let timer = timer::Timer::new();
-    
     loop {
         let temp = get_temp();
-        if temp > max_temp && cur_freq > min_freq {
-            cur_freq -= STEP_FREQ;
-            if cur_freq < min_freq {
-                cur_freq = min_freq;
-            }
-            set_freq(cur_freq);
-        } else if temp < (max_temp - 5) && cur_freq < max_freq {
-            cur_freq += STEP_FREQ;
-            if cur_freq > max_freq {
-                cur_freq = max_freq;
-            }
-            set_freq(cur_freq);
-            // timer.schedule_with_delay(chrono::Duration::seconds(1), move || {
-            //
-            // });
+        if temp > max_temp && *FREQUENCY.lock().unwrap() > min_freq {
+            // decrease frequency
+            let min_freq = min_freq.clone();
+            thread::spawn(move || {
+                let mut lock = FREQUENCY.try_lock();
+                Delay::new(Duration::from_millis(DECR_TIME_MILLI))
+                    .map(|()| {
+                        if let Ok(ref mut cur_freq) = lock {
+                            **cur_freq -= STEP_FREQ;
+                            let temp_diff = temp - max_temp;
+                            if temp_diff > 0 {
+                                let new_freq =
+                                    STEP_FREQ * ((DEACCR_RATIO * temp_diff as f64) as u64);
+                                // need to check if the new frequency number will wrap around
+                                if (**cur_freq - new_freq) > max_freq {
+                                    **cur_freq = min_freq;
+                                } else {
+                                    **cur_freq -= new_freq;
+                                }
+                            }
+                            if **cur_freq < min_freq {
+                                **cur_freq = min_freq;
+                            }
+                            set_freq(cur_freq.clone());
+                        }
+                    })
+                    .wait()
+                    .unwrap();
+            });
+        } else if temp < (max_temp - 5) && *FREQUENCY.lock().unwrap() < max_freq {
+            // increase frequency
+            let max_freq = max_freq.clone();
+            thread::spawn(move || {
+                let mut lock = FREQUENCY.try_lock();
+                Delay::new(Duration::from_millis(INCR_TIME_MILLI))
+                    .map(|()| {
+                        if let Ok(ref mut cur_freq) = lock {
+                            **cur_freq += STEP_FREQ;
+                            if **cur_freq > max_freq {
+                                **cur_freq = max_freq;
+                            }
+                            set_freq(cur_freq.clone());
+                        }
+                    })
+                    .wait()
+                    .unwrap();
+            });
+            // .join()
+            //     .expect("thread::spawn failed");
         }
-        debug!("current temperature: {}", temp);
+
+        info!("current temperature: {}", temp);
         thread::sleep(time::Duration::from_millis(SLEEP_TIME_MILLI));
     }
 }
