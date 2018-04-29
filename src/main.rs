@@ -20,13 +20,13 @@ use futures_timer::Delay;
 use futures::prelude::*;
 
 // Sleep interval between temperature checking.
-const SLEEP_TIME_MILLI: u64 = 50;
+const SLEEP_TIME_MILLI: u64 = 500;
 
 // Interval between frequency increase operation
 const INCR_TIME_MILLI: u64 = 1000;
 
 // Interval between frequency decrease operation
-const DECR_TIME_MILLI: u64 = 200;
+const DECR_TIME_MILLI: u64 = 100;
 
 // File where minimum supported frequency should be collected.
 const MIN_FREQ_FILE: &'static str = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq";
@@ -40,7 +40,8 @@ const STEP_FREQ: u64 = 100000;
 // Possible files where current temperature should be collected.
 const POSSIBLE_TEMP_FILES: &'static [&'static str] = &["/sys/class/hwmon/hwmon2/temp1_input"];
 
-const DEACCR_RATIO: f64 = (1.0 / 2.0);
+// For spikes in temperature (a very sudden workload)
+const DEACCR_RATIO: f64 = (1.0 / 4.0);
 
 lazy_static! {
     static ref FREQUENCY: std::sync::Arc<std::sync::Mutex<u64>> =
@@ -123,7 +124,7 @@ fn main() {
                             if temp_diff > 0 {
                                 let new_freq =
                                     STEP_FREQ * ((DEACCR_RATIO * temp_diff as f64) as u64);
-                                // need to check if the new frequency number will wrap around
+                                // need to check if the new frequency number wraps around max integer limit
                                 if (**cur_freq - new_freq) > max_freq {
                                     **cur_freq = min_freq;
                                 } else {
