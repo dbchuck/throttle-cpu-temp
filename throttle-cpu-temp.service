@@ -1,5 +1,5 @@
 [Unit]
-Description=Throttle CPU Temperature daemon
+Description=Throttle CPU Temp daemon
 
 [Service]
 ExecStart=/usr/local/bin/throttle-cpu-temp 80
