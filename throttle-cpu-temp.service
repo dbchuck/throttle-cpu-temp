@@ -1,0 +1,8 @@
+[Unit]
+Description=Throttle CPU Temperature daemon
+
+[Service]
+ExecStart=/usr/local/bin/throttle-cpu-temp 80
+
+[Install]
+WantedBy=multi-user.target
