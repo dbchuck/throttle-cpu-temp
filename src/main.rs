@@ -38,7 +38,14 @@ const MAX_FREQ_FILE: &'static str = "/sys/devices/system/cpu/cpu0/cpufreq/cpuinf
 const STEP_FREQ: u64 = 100000;
 
 // Possible files where current temperature should be collected.
-const POSSIBLE_TEMP_FILES: &'static [&'static str] = &["/sys/class/hwmon/hwmon2/temp1_input"];
+const POSSIBLE_TEMP_FILES: &'static [&'static str] = &[
+	"/sys/class/thermal/thermal_zone1/temp",
+	"/sys/class/thermal/thermal_zone2/temp",
+	"/sys/class/hwmon/hwmon1/temp1_input",
+	"/sys/class/hwmon/hwmon2/temp1_input",
+	"/sys/class/hwmon/hwmon1/device/temp1_input",
+	"/sys/class/hwmon/hwmon2/device/temp1_input",
+];
 
 // For spikes in temperature (a very sudden workload)
 const DEACCR_RATIO: f64 = (1.0 / 4.0);
