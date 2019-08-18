@@ -71,13 +71,22 @@ fn max_frequency() -> u64 {
 }
 
 fn get_temp() -> u64 {
+    // Gets the highest sensor temperature
+    let mut max_temp = 0;
     for file in POSSIBLE_TEMP_FILES {
         if Path::new(file).exists() {
-            return parse_int_file(file.to_string()) / 1000;
+            let sensor_temp = parse_int_file(file.to_string()) / 1000;
+            if max_temp < sensor_temp {
+                max_temp = sensor_temp;
+                info!("got temp from: {}", file);
+            }
         }
     }
-    error!("impossible to collect current cpu temperature!");
-    process::exit(1);
+    if max_temp == 0 {
+        error!("impossible to collect current cpu temperature!");
+        process::exit(1);
+    }
+    return max_temp;
 }
 
 fn set_freq(freq: u64) {
